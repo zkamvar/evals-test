@@ -266,11 +266,12 @@
             "2024-04-27",
             "2024-05-04",
             "2024-11-23",
-            "2024-11-30"
+            "2024-11-30",
+            "2024-12-07"
         ]
     },
-    "initial_as_of": "2024-11-30",
-    "current_date": "2024-11-30",
+    "initial_as_of": "2024-12-07",
+    "current_date": "2024-12-07",
     "models": [
         "CADPH-FluCAT_Ensemble",
         "CEPH-Rtrend_fluH",
@@ -304,6 +305,7 @@
         "SigSci-TSENS",
         "Stevens-GBR",
         "Stevens-ILIForecast",
+        "UGA_CEID-Walk",
         "UGA_flucast-Copycat",
         "UGA_flucast-INFLAenza",
         "UGuelph-CompositeCurve",
