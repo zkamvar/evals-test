@@ -173,7 +173,7 @@ const App = {
 
         // save initial selected state
         this.state.selected_target = options['initial_target'];
-        this.state.selected_disaggregate_by = options['initial_disaggregate_by'];
+        this.state.selected_disaggregate_by = '(None)';
         this.state.selected_eval_window = options['initial_eval_window'];
         this.state.selected_display_type = 'table';
 
