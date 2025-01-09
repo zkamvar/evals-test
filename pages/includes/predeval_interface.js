@@ -1,5 +1,5 @@
 // import App from 'https://cdn.jsdelivr.net/gh/reichlab/predtimechart@2.0.11/dist/predtimechart.bundle.js';
-import App from includes/predeval.js
+import App from './predeval.js'
 document.predeval = App;  // for debugging
 
 function replace_chars(the_string) {
@@ -37,7 +37,7 @@ fetch(`${root}/predeval-options.json`)
         console.info("fetch(): done. calling App.initialize().", data);
 
         // componentDiv, _fetchData, isIndicateRedraw, options, _calcUemForecasts:
-        App.initialize('predEval_row', _fetchData, false, data, null);
+        App.initialize('predEval_row', _fetchData, data);
     })
     .then(function() {
         // ZNK 2024-09-16: update for bootstrap 5

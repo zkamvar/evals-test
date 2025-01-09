@@ -2,8 +2,8 @@
  * predeval: A JavaScript (ES6 ECMAScript) module for viewing forecast evaluations.
  */
 
-import {closestYear} from "./utils.js";
-import _validateOptions from './validation.js';
+// import {closestYear} from "./utils.js";
+// import _validateOptions from './validation.js';
 
 
 //
@@ -166,6 +166,7 @@ const App = {
         //     return error;  // leave display default/blank
         // }
 
+        console.log(options);
         // save static vars
         this.state.targets = options['targets'];
         this.state.eval_windows = options['eval_windows'];
@@ -180,7 +181,7 @@ const App = {
         // populate UI elements, setting selection state to initial
         console.debug('initialize(): initializing UI');
         const $componentDiv = $(componentDivEle);
-        _createUIElements($componentDiv, Object.keys(this.state.task_ids), isDisclaimerPresent);
+        _createUIElements($componentDiv);
         this.initializeUI();
 
         // wire up UI controls (event handlers)
@@ -212,7 +213,7 @@ const App = {
         // populate the target <SELECT>
         const $targetSelect = $("#predeval_target");
         const thisState = this.state;
-        this.state.targets.forEach(function (target) {
+        thisState.targets.forEach(function (target) {
             const target_id = target.target_id;
             const selected = target_id === thisState.selected_target ? 'selected' : '';
             const optionNode = `<option value="${target_id}" ${selected} >${target_id}</option>`;
@@ -223,7 +224,8 @@ const App = {
         // populate the disaggregate <SELECT>
         const $disaggregateSelect = $("#predeval_disaggregate_by");
         const thisState = this.state;
-        const disaggregate_bys = this.state.targets[thisState.selected_target].disaggregate_by;
+        const selected_target_obj = thisState.targets.filter((obj) => obj.target_id === thisState.selected_target)[0];
+        const disaggregate_bys = selected_target_obj.disaggregate_by;
         $disaggregateSelect.empty();
         disaggregate_bys.forEach(function (by) {
             const selected = by === thisState.selected_disaggregate_by ? 'selected' : '';
@@ -239,7 +241,7 @@ const App = {
             const window_name = window.window_name;
             const selected = window_name === thisState.selected_eval_window ? 'selected' : '';
             const optionNode = `<option value="${window_name}" ${selected} >${window_name}</option>`;
-            $targetSelect.append(optionNode);
+            $windowSelect.append(optionNode);
         });
     },
     initializeDisplayTypeUI() {
