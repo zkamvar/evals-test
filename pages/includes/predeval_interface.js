@@ -1,12 +1,13 @@
-import App from 'https://cdn.jsdelivr.net/gh/reichlab/predtimechart@2.0.11/dist/predtimechart.bundle.js';
-document.predtimechart = App;  // for debugging
+// import App from 'https://cdn.jsdelivr.net/gh/reichlab/predtimechart@2.0.11/dist/predtimechart.bundle.js';
+import App from includes/predeval.js
+document.predeval = App;  // for debugging
 
 function replace_chars(the_string) {
     // replace all non-alphanumeric characters, except dashes and underscores, with a dash
     return the_string.replace(/[^a-zA-Z0-9-_]/g, '-');
 }
 
-const root = "https://raw.githubusercontent.com/elray1/flusight-dashboard/refs/heads/ptc/data/";
+const root = "https://raw.githubusercontent.com/elray1/flusight-dashboard/refs/heads/predeval/data/";
 
 function _fetchData(isForecast, targetKey, taskIDs, referenceDate) {
     // ex taskIDs: {"scenario_id": "A-2022-05-09", "location": "US"} . NB: key order not sorted
@@ -30,7 +31,7 @@ function _fetchData(isForecast, targetKey, taskIDs, referenceDate) {
 
 
 // load options and then initialize the component
-fetch(`${root}/predtimechart-options.json`)
+fetch(`${root}/predeval-options.json`)
     .then(response => response.json())
     .then((data) => {
         console.info("fetch(): done. calling App.initialize().", data);
