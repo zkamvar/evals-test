@@ -1,5 +1,7 @@
 // import App from 'https://cdn.jsdelivr.net/gh/reichlab/predtimechart@2.0.11/dist/predtimechart.bundle.js';
 import App from './predeval.js'
+import { parse } from './csv/index.min.js'
+
 document.predeval = App;  // for debugging
 
 function replace_chars(the_string) {
@@ -9,24 +11,21 @@ function replace_chars(the_string) {
 
 const root = "https://raw.githubusercontent.com/elray1/flusight-dashboard/refs/heads/predeval/data/";
 
-function _fetchData(isForecast, targetKey, taskIDs, referenceDate) {
+async function _fetchData(target, eval_window, disaggregate_by) {
     // ex taskIDs: {"scenario_id": "A-2022-05-09", "location": "US"} . NB: key order not sorted
-    console.info("_fetchData(): entered.", isForecast, `"${targetKey}"`, taskIDs, `"${referenceDate}"`);
+    console.info("_fetchData(): entered.", `"${target}"`, `"${eval_window}"`, `"${disaggregate_by}"`);
 
-    const targetKeyStr = replace_chars(targetKey);
-
-    // get .json file name: 1) get taskIDs values ordered by sorted keys, 2) clean up ala `json_file_name()`
-    const taskIDsValsSorted = Object.keys(taskIDs).sort().map(key => taskIDs[key]);
-    const taskIDsValsStr = replace_chars(taskIDsValsSorted.join(' '));
+    // const targetKeyStr = replace_chars(targetKey);
 
     let target_path;
-    const file_name = `${targetKeyStr}_${taskIDsValsStr}_${referenceDate}.json`;
-    if (isForecast) {
-        target_path = `${root}/forecasts/${file_name}`;
+    if (disaggregate_by === '(None)') {
+      target_path = `${root}scores/${target}/${eval_window}/scores.csv`;
     } else {
-        target_path = `${root}/targets/${file_name}`;
+      target_path = `${root}scores/${target}/${eval_window}/${disaggregate_by}/scores.csv`;
     }
-    return fetch(target_path);  // Pwomise?
+    return fetch(target_path)
+        .then(response => response.text())
+        .then(data => parse(data));
 }
 
 
