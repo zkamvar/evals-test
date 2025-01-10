@@ -80,5 +80,3 @@ task_id_text:
     '72': Puerto Rico
     '74': U.S. Minor Outlying Islands
     '78': Virgin Islands
-initial_target: wk inc flu hosp
-initial_eval_window: Full season
