@@ -4,6 +4,7 @@
 
 // import {closestYear} from "./utils.js";
 // import _validateOptions from './validation.js';
+import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 
 
 //
@@ -48,13 +49,15 @@ function _createUIElements($componentDiv) {
     $optionsForm.append(_createFormRow('predeval_target', 'Target'));
     $optionsForm.append(_createFormRow('predeval_disaggregate_by', 'Disaggregate by'));
     $optionsForm.append(_createFormRow('predeval_eval_window', 'Evaluation window'));
-    $optionsForm.append(_createFormRow('predeval_display_type', 'Display type'));
+    // $optionsForm.append(_createFormRow('predeval_display_type', 'Display type'));
+    $optionsForm.append(_createFormRow('predeval_metric', 'Metric'));
     $optionsDiv.append($optionsForm);
 
     //
     // make $evalDiv (right column)
     //
     const $evalDiv = $('<div class="col-md-9" id="predeval_main"></div>');
+    $evalDiv.append($('<div id="predeval_plotly_div" style="width: 100%; height: 72vh; position: relative;"></div>'));
 
     //
     // finish
@@ -92,6 +95,39 @@ function showDialog(title, message) {
 }
 
 
+
+const score_col_name_to_text_map = new Map(
+    [
+        ['model_id', 'Model'],
+        ['wis', 'WIS'],
+        ['wis_relative_skill', 'Rel. WIS'],
+        ['wis_scaled_relative_skill', 'Rel. WIS'],
+        ['ae_median', 'MAE'],
+        ['ae_median_relative_skill', 'Rel. MAE'],
+        ['ae_median_scaled_relative_skill', 'Rel. MAE'],
+        ['ae_point', 'MAE'],
+        ['ae_point_relative_skill', 'Rel. MAE'],
+        ['ae_point_scaled_relative_skill', 'Rel. MAE'],
+        ['se_point', 'MSE'],
+        ['se_point_relative_skill', 'Rel. MSE'],
+        ['se_point_scaled_relative_skill', 'Rel. MSE']
+    ]
+)
+/**
+ * Converts a score column name to a human-readable string.
+ * TODO: move to utils.js
+ * @param {String} score_col_name - the name of a column in a scores data object
+ */
+function score_col_name_to_text(score_name) {
+    const interval_coverage_regex = new RegExp('^interval_coverage_');
+    if (interval_coverage_regex.test(score_name)) {
+        return `${score_name.slice(18)}\% Cov.`;
+    } else {
+        return score_col_name_to_text_map.get(score_name) || titleCase(score_name);
+    }
+}
+
+
 //
 // App
 //
@@ -122,10 +158,17 @@ const App = {
         selected_target: '',
         selected_disaggregate_by: '',
         selected_eval_window: '',
-        display_type: 'table',
+        // selected_display_type: '',
 
         // 2/2 Data used to create tables or plots:
         scores: [],
+    },
+
+    //
+    // getters
+    //
+    getSelectedTargetObj() {
+        return this.state.targets.filter((obj) => obj.target_id === this.state.selected_target)[0];
     },
 
 
@@ -173,12 +216,12 @@ const App = {
 
         // save initial selected state
         this.state.selected_target = options['initial_target'];
-        this.state.selected_disaggregate_by = '(None)';
         this.state.selected_eval_window = options['initial_eval_window'];
-        this.state.selected_display_type = 'table';
+        this.state.selected_disaggregate_by = '(None)';
+        // this.state.selected_display_type = 'Table';
+        this.state.selected_metric = this.getSelectedTargetObj().metrics[0];
 
         // populate UI elements, setting selection state to initial
-        console.debug('initialize(): initializing UI');
         const $componentDiv = $(componentDivEle);
         _createUIElements($componentDiv);
         this.initializeUI();
@@ -187,10 +230,8 @@ const App = {
         this.addEventHandlers();
 
         // pull initial data (scores) and update the plot
-        console.debug('initialize(): fetching data and updating display');
         this.fetchDataUpdateDisplay(true);
 
-        console.debug('initialize(): done');
         return null;  // no error
     },
     initializeUI() {
@@ -198,23 +239,23 @@ const App = {
         this.initializeTargetUI();
         this.initializeDisaggregateByUI();
         this.initializeEvalWindowUI();
-        this.initializeDisplayTypeUI();
+        // this.initializeDisplayTypeUI();
+        this.initializeMetricUI();
 
         // initialize plotly (right column)
-        // const plotyDiv = document.getElementById('ploty_div');
-        // const data = []  // data will be update by `updatePlot()`
-        // const layout = this.getPlotlyLayout();
-        // Plotly.newPlot(plotyDiv, data, layout, {
-        //     modeBarButtonsToRemove: ['lasso2d', 'autoScale2d'],
-        // });
+        $('#predeval_plotly_div').hide();  // hide plot
+        const plotyDiv = document.getElementById('predeval_plotly_div');
+        const data = []  // data will be updated by `updatePlot()`
+        const layout = this.getPlotlyLayout();
+        Plotly.newPlot(plotyDiv, data, layout, {
+            modeBarButtonsToRemove: ['lasso2d', 'autoScale2d'],
+        });
     },
     initializeTargetUI() {
         // populate the target <SELECT>
         const $targetSelect = $("#predeval_target");
         const thisState = this.state;
-        console.log(thisState.targets);
         thisState.targets.forEach(function (target) {
-            console.log(target);
             const target_id = target.target_id;
             const selected = target_id === thisState.selected_target ? 'selected' : '';
             const optionNode = `<option value="${target_id}" ${selected} >${target_id}</option>`;
@@ -225,7 +266,7 @@ const App = {
         // populate the disaggregate <SELECT>
         const $disaggregateSelect = $("#predeval_disaggregate_by");
         const thisState = this.state;
-        const selected_target_obj = thisState.targets.filter((obj) => obj.target_id === thisState.selected_target)[0];
+        const selected_target_obj = this.getSelectedTargetObj();
         const disaggregate_bys = ['(None)'].concat(selected_target_obj.disaggregate_by);
         $disaggregateSelect.empty();
         disaggregate_bys.forEach(function (by) {
@@ -257,11 +298,27 @@ const App = {
             $displaySelect.append(optionNode);
         });
     },
+    initializeMetricUI() {
+        const thisState = this.state;
+        const $metricSelect = $('#predeval_metric');
+        const selected_target_obj = this.getSelectedTargetObj();
+        $metricSelect.empty();
+        selected_target_obj.metrics.forEach(function (metric) {
+            const selected = metric === thisState.selected_metric ? 'selected' : '';
+            const optionNode = `<option value="${metric}" ${selected} >${metric}</option>`;
+            $metricSelect.append(optionNode);
+        });
+        if (thisState.selected_display_type === 'Table') {
+            $metricSelect.prop("disabled", true);
+        } else {
+            $metricSelect.prop("disabled", false);  
+        }
+    },
     addEventHandlers() {
         // target, disaggregate by,  selects
         $('#predeval_target').on('change', function () {
             App.state.selected_target = this.value;
-            this.initializeDisaggregateByUI();
+            App.initializeDisaggregateByUI();
             App.fetchDataUpdateDisplay(true);
         });
         $('#predeval_disaggregate_by').on('change', function () {
@@ -272,10 +329,11 @@ const App = {
             App.state.selected_eval_window = this.value;
             App.fetchDataUpdateDisplay(true);
         });
-        $('#predeval_display_type').on('change', function () {
-            App.state.selected_display_type = this.value;
-            App.fetchDataUpdateDisplay(false);
-        });
+        // $('#predeval_display_type').on('change', function () {
+        //     App.state.selected_display_type = this.value;
+        //     App.initializeMetricUI();
+        //     App.fetchDataUpdateDisplay(false);
+        // });
     },
 
     // Returns information about the task ID <SELECT>(s) as an object similar to format of `task_ids` except that each
@@ -309,7 +367,7 @@ const App = {
     //
 
     /**
-     * Updates the plot, optionally first fetching data.
+     * Updates the table or plot, optionally first fetching data.
      *
      * @param isFetchFirst true if should fetch before plotting. false if no fetch
      * @param isFetchCurrentTruth applies if isFetchFirst: controls whether current truth is fetched in addition to
@@ -319,17 +377,9 @@ const App = {
         if (isFetchFirst) {
             const promises = [this.fetchScores()];
             console.debug(`fetchDataUpdateDisplay(${isFetchFirst}): waiting on promises`);
-            // const $plotyDiv = $('#ploty_div');
-            // if (this.isIndicateRedraw) {
-            //     $plotyDiv.fadeTo(0, 0.25);
-            // }
             Promise.all(promises).then((values) => {
                 console.debug(`fetchDataUpdateDisplay(${isFetchFirst}): Promise.all() done. updating plot`, values);
                 this.updateDisplay();
-                // this.updateDisplay(isResetYLimit);
-                // if (this.isIndicateRedraw) {
-                //     $plotyDiv.fadeTo(0, 1.0);
-                // }
             });
         } else {
             console.debug(`fetchDataUpdateDisplay(${isFetchFirst}): updating plot`);
@@ -350,7 +400,7 @@ const App = {
     // update display
     updateDisplay() {
         console.log('updateDisplay(): entered');
-        if (this.state.selected_display_type === 'table') {
+        if (this.state.selected_disaggregate_by === '(None)') {
             this.updateTable();
         } else {
             this.updatePlot();
@@ -359,35 +409,54 @@ const App = {
 
     // update display with table
     updateTable() {
+        $('#predeval_plotly_div').hide();  // clear plot
+        $('#predeval_table').remove();  // clear table
         const thisState = this.state;
         const $evalDiv = $('#predeval_main');
-        const $table = $('<table id="predeval_table class="table table-sm table-striped table-bordered"></table>');
+        const $table = $('<table id="predeval_table" class="table table-sm table-striped table-bordered"></table>');
         const $thead = $('<thead></thead>');
         const $tbody = $('<tbody></tbody>');
         const $tr = $('<tr></tr>');
         const $th = $('<th></th>');
         const $td = $('<td></td>');
+        const interval_coverage_regex = new RegExp('^interval_coverage_');
 
         // add header row
-        const header = thisState.scores[0];
-        header.forEach(function (h) {
-            $tr.append($th.clone().text(h));
+        const cols = thisState.scores.columns;
+        cols.forEach(function (c) {
+            $tr.append($th.clone().text(score_col_name_to_text(c)));
         });
         $thead.append($tr);
         $table.append($thead);
 
-        // add data rows
-        thisState.scores.slice(1).forEach(function (scores_row) {
+        // add data
+        for (let i = 0; i < thisState.scores.length; i++) { // table rows
             const $tr = $('<tr></tr>');
-            scores_row.forEach(function (score) {
-                $tr.append($td.clone().text(score));
-            });
+            for (let j = 0; j < cols.length; j++) { // table columns
+                const col_name = cols[j];
+                let text_value = thisState.scores[i][col_name];
+                if (col_name !== 'model_id') {
+                    // This is a score column, so convert to float
+                    text_value = parseFloat(text_value);
+
+                    // TODO: consider whether to make the formatting behaviors configurable
+
+                    // If it's an interval coverage column, multiply by 100
+                    if (interval_coverage_regex.test(col_name)) {
+                        text_value *= 100;
+                    }
+
+                    // For all score columns, round to 1 decimal place
+                    text_value = text_value.toFixed(1);
+                }
+                $tr.append($td.clone().text(text_value));
+            }
             $tbody.append($tr);
-        });
+        }
         $table.append($tbody);
 
         // replace existing table
-        $evalDiv.empty().append($table);
+        $evalDiv.append($table);
     },
 
     //
@@ -395,227 +464,74 @@ const App = {
     //
 
     /**
-     * Updates the plot, preserving any current xaxis range limit, and optionally any current yaxis range limit
-     *
-     * @param isResetYLimit true if should reset any yaxis range limit currently set
+     * Updates the plot
      */
-    updatePlot(isResetYLimit) {
-        const plotyDiv = document.getElementById('ploty_div');
+    updatePlot() {
+        $('#predeval_table').remove();  // clear table
+        $('#predeval_plotly_div').show();  // clear plot
+        const plotlyDiv = document.getElementById('predeval_plotly_div');
         const data = this.getPlotlyData();
         let layout = this.getPlotlyLayout();
         if (data.length === 0) {
-            layout = {title: {text: `No Visualization Data Found for ${this.state.selected_as_of_date}`}};
+            layout = {title: {text: `No score data found.`}};
         }
 
-        // before updating the plot we store the xaxis and yaxis ranges so that we can relayout using them if need be.
-        // NB: the default xaxis.range seems to be [-1, 6] when updating for the first time (yaxis.range = [-1, 4]).
-        // there might be a better way to determine this.
-        let currXAxisRange;
-        let currYAxisRange;
-        let isXAxisRangeDefault;
-        let isYAxisRangeDefault;
-        if (plotyDiv.data.length !== 0) {  // we have data to plot. o/w plotyDiv.layout.* is undefined
-            currXAxisRange = plotyDiv.layout.xaxis.range;
-            currYAxisRange = plotyDiv.layout.yaxis.range;
-            isXAxisRangeDefault = ((currXAxisRange.length === 2) && (currXAxisRange[0] === -1) && (currXAxisRange[1] === 6));
-            isYAxisRangeDefault = ((currYAxisRange.length === 2) && (currYAxisRange[0] === -1) && (currYAxisRange[1] === 4));
-        }
-        Plotly.react(plotyDiv, data, layout);
-        if (plotyDiv.data.length !== 0) {  // we have data to plot. o/w plotyDiv.layout.* is undefined
-            if (!isXAxisRangeDefault) {
-                Plotly.relayout(plotyDiv, 'xaxis.range', currXAxisRange);
-            } else if (this.state.initial_xaxis_range != null) {
-                Plotly.relayout(plotyDiv, 'xaxis.range', this.state.initial_xaxis_range);
-            }
-
-            if (!isResetYLimit) {
-                if (!isYAxisRangeDefault) {
-                    Plotly.relayout(plotyDiv, 'yaxis.range', currYAxisRange);
-                } else if (this.state.initial_yaxis_range != null) {
-                    Plotly.relayout(plotyDiv, 'yaxis.range', this.state.initial_yaxis_range);
-                }
-            }
-        }
-        this.initializeDateRangePicker();  // b/c jquery binding is apparently lost with any Plotly.*() call
+        Plotly.react(plotlyDiv, data, layout);
     },
     getPlotlyLayout() {
-        if (this.state.target_variables.length === 0) {
+        if (this.state.scores.length === 0) {
             return {};
         }
 
-        const variable = this.state.target_variables.filter((obj) => obj.value === this.state.selected_target_var)[0].plot_text;
-        const taskIdTexts = Object.values(this.selectedTaskIDs()).map(taskID => taskID['text']);
+        // const variable = this.state.target_variables.filter((obj) => obj.value === this.state.selected_target_var)[0].plot_text;
+        // const taskIdTexts = Object.values(this.selectedTaskIDs()).map(taskID => taskID['text']);
         return {
             autosize: true,
-            showlegend: false,
+            showlegend: true,
             title: {
-                text: `Forecasts of ${variable} <br> in ${taskIdTexts.join(', ')} as of ${this.state.selected_as_of_date}`,
+                text: `${this.state.selected_metric} by ${this.state.selected_disaggregate_by}`,
                 x: 0.5,
                 y: 0.90,
                 xanchor: 'center',
                 yanchor: 'top',
             },
             xaxis: {
-                title: {text: 'Date'},
-                rangeslider: {},
+                title: {text: this.state.disaggregate_by},
+                fixedrange: false
             },
             yaxis: {
-                title: {text: variable, hoverformat: '.2f'},
+                title: {text: this.state.selected_metric, hoverformat: '.2f'},
                 fixedrange: false
             }
         }
     },
     getPlotlyData() {
-        const state = this.state;
+        const thisState = this.state;
         let pd = [];
-        if (state.selected_truth.includes('Current Target') && Object.keys(state.current_truth).length !== 0) {
-            pd.push({
-                x: state.current_truth.date,
-                y: state.current_truth.y,
-                type: 'scatter',
-                mode: 'lines',
-                name: 'Current Target',
-                marker: {color: 'darkgray'}
-            })
+
+        console.log('in getPlotlyData()');
+        if (thisState.scores.length !== 0) {
+            // group by model
+            const grouped = d3.group(thisState.scores, d => d.model_id);
+            
+            // add a line for scores for each model
+            for (const [model_id, model_scores] of grouped) {
+                const x = model_scores.map(d => d[thisState.selected_disaggregate_by]);
+                const y = model_scores.map(d => d[thisState.selected_metric]);
+                const line_data = {
+                    x: x,
+                    y: y,
+                    mode: 'lines',
+                    type: 'scatter',
+                    name: model_id,
+                    hovermode: false,
+                    opacity: 0.7,
+                    // line: {color: state.colors[index]},
+                    // hoverinfo: 'none'
+                };
+                pd.push(line_data);
+            }
         }
-        if (state.selected_truth.includes('Target as of') && Object.keys(state.as_of_truth).length !== 0) {
-            pd.push({
-                x: state.as_of_truth.date,
-                y: state.as_of_truth.y,
-                type: 'scatter',
-                mode: 'lines',
-                opacity: 0.5,
-                name: `Target as of ${state.selected_as_of_date}`,
-                marker: {color: 'black'}
-            })
-        }
-
-        let pd0 = []
-        if (state.forecasts.length !== 0) {
-            // add the line for predictive medians
-            pd0 = Object.keys(state.forecasts).map((model) => {
-                if (state.selected_models.includes(model)) {
-                    const index = state.models.indexOf(model)
-                    const model_forecasts = state.forecasts[model]
-                    const date = model_forecasts.target_end_date
-                    const lq1 = model_forecasts['q0.025']
-                    const lq2 = model_forecasts['q0.25']
-                    const mid = model_forecasts['q0.5']
-                    const uq1 = model_forecasts['q0.75']
-                    const uq2 = model_forecasts['q0.975']
-
-                    // 1-3: sort model forecasts in order of target end date
-                    // 1) combine the arrays:
-                    const list = []
-                    for (let j = 0; j < date.length; j++) {
-                        list.push({
-                            date: date[j],
-                            lq1: lq1[j],
-                            lq2: lq2[j],
-                            uq1: uq1[j],
-                            uq2: uq2[j],
-                            mid: mid[j]
-                        })
-                    }
-
-                    // 2) sort:
-                    list.sort((a, b) => (moment(a.date).isBefore(b.date) ? -1 : 1))
-
-                    // 3) separate them back out:
-                    for (let k = 0; k < list.length; k++) {
-                        model_forecasts.target_end_date[k] = list[k].date
-                        model_forecasts['q0.025'][k] = list[k].lq1
-                        model_forecasts['q0.25'][k] = list[k].lq2
-                        model_forecasts['q0.5'][k] = list[k].mid
-                        model_forecasts['q0.75'][k] = list[k].uq1
-                        model_forecasts['q0.975'][k] = list[k].uq2
-                    }
-
-                    const x = [];
-                    x.push(model_forecasts.target_end_date.slice(0)[0]);
-
-                    const y = [];
-                    y.push(model_forecasts['q0.5'].slice(0)[0]);
-
-                    return {
-                        x: x,
-                        y: y,
-                        mode: 'lines',
-                        type: 'scatter',
-                        name: model,
-                        hovermode: false,
-                        opacity: 0.7,
-                        line: {color: state.colors[index]},
-                        hoverinfo: 'none'
-                    };
-                }
-                return []
-            })
-        }
-        pd = pd0.concat(...pd)
-
-        // add interval polygons
-        let pd1 = []
-        if (state.forecasts.length !== 0) {
-            pd1 = Object.keys(state.forecasts).map((model) => {  // notes that state.forecasts are still sorted
-                if (state.selected_models.includes(model)) {
-                    const index = state.models.indexOf(model)
-                    const is_hosp = state.selected_target_var === 'hosp'
-                    const mode = is_hosp ? 'lines' : 'lines+markers'
-                    const model_forecasts = state.forecasts[model]
-                    let upper_quantile
-                    let lower_quantile
-                    const plot_line = {
-                        // point forecast
-                        x: model_forecasts.target_end_date,
-                        y: model_forecasts['q0.5'],
-                        type: 'scatter',
-                        name: model,
-                        opacity: 0.7,
-                        mode,
-                        line: {color: state.colors[index]}
-                    }
-
-                    if (state.selected_interval === '50%') {
-                        lower_quantile = 'q0.25'
-                        upper_quantile = 'q0.75'
-                    } else if (state.selected_interval === '95%') {
-                        lower_quantile = 'q0.025'
-                        upper_quantile = 'q0.975'
-                    } else {
-                        return [plot_line]
-                    }
-
-                    const x = Object.keys(state.as_of_truth).length !== 0 ?
-                        model_forecasts.target_end_date :
-                        model_forecasts.target_end_date;
-                    const y1 = Object.keys(state.as_of_truth).length !== 0 ?
-                        model_forecasts[lower_quantile] :  // lower edge
-                        model_forecasts[lower_quantile];
-                    const y2 = Object.keys(state.as_of_truth).length !== 0 ?
-                        model_forecasts[upper_quantile] :
-                        model_forecasts[upper_quantile];  // upper edge
-                    return [
-                        plot_line,
-                        {
-                            // interval forecast -- currently fixed at 50%
-                            x: [].concat(x, x.slice().reverse()),
-                            y: [].concat(y1, y2.slice().reverse()),
-                            fill: 'toself',
-                            fillcolor: state.colors[index],
-                            opacity: 0.3,
-                            line: {color: 'transparent'},
-                            type: 'scatter',
-                            name: model,
-                            showlegend: false,
-                            hoverinfo: 'skip'
-                        }
-                    ]
-                }
-                return []
-            })
-        }
-        pd = pd.concat(...pd1)
 
         // done!
         return pd

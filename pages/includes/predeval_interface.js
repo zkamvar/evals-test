@@ -1,8 +1,9 @@
 // import App from 'https://cdn.jsdelivr.net/gh/reichlab/predtimechart@2.0.11/dist/predtimechart.bundle.js';
 import App from './predeval.js'
-import { parse } from './csv/index.min.js'
+import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 
 document.predeval = App;  // for debugging
+document.d3m = d3;  // for debugging
 
 function replace_chars(the_string) {
     // replace all non-alphanumeric characters, except dashes and underscores, with a dash
@@ -23,9 +24,10 @@ async function _fetchData(target, eval_window, disaggregate_by) {
     } else {
       target_path = `${root}scores/${target}/${eval_window}/${disaggregate_by}/scores.csv`;
     }
-    return fetch(target_path)
-        .then(response => response.text())
-        .then(data => parse(data));
+    return d3.csv(target_path);
+    // return fetch(target_path)
+    //     .then(response => response.text())
+    //     .then(data => parse(data));
 }
 
 
