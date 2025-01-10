@@ -11,6 +11,11 @@ import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 // helper functions
 //
 
+function titleCase(str) {  // per https://stackoverflow.com/questions/196972/convert-string-to-title-case-with-javascript
+    return str.toLowerCase().replace(/\b\w/g, s => s.toUpperCase());
+}
+
+
 /**
  * `initialize()` helper that builds UI by adding DOM elements to $componentDiv. the UI is one row with two columns:
  * options on left and the table or plot on the right
@@ -22,10 +27,6 @@ function _createUIElements($componentDiv) {
     //
     // helper functions for creating for rows
     //
-
-    function titleCase(str) {  // per https://stackoverflow.com/questions/196972/convert-string-to-title-case-with-javascript
-        return str.toLowerCase().replace(/\b\w/g, s => s.toUpperCase());
-    }
 
     function _createFormRow(selectId, label) {
         return $(
@@ -47,8 +48,8 @@ function _createUIElements($componentDiv) {
     // initializeTargetVarsUI(), initializeTaskIDsUI(), and initializeIntervalsUI(), respectively
     const $optionsForm = $('<form></form>');
     $optionsForm.append(_createFormRow('predeval_target', 'Target'));
-    $optionsForm.append(_createFormRow('predeval_disaggregate_by', 'Disaggregate by'));
     $optionsForm.append(_createFormRow('predeval_eval_window', 'Evaluation window'));
+    $optionsForm.append(_createFormRow('predeval_disaggregate_by', 'Disaggregate by'));
     // $optionsForm.append(_createFormRow('predeval_display_type', 'Display type'));
     $optionsForm.append(_createFormRow('predeval_metric', 'Metric'));
     $optionsDiv.append($optionsForm);
@@ -100,16 +101,12 @@ const score_col_name_to_text_map = new Map(
     [
         ['model_id', 'Model'],
         ['wis', 'WIS'],
-        ['wis_relative_skill', 'Rel. WIS'],
         ['wis_scaled_relative_skill', 'Rel. WIS'],
         ['ae_median', 'MAE'],
-        ['ae_median_relative_skill', 'Rel. MAE'],
         ['ae_median_scaled_relative_skill', 'Rel. MAE'],
         ['ae_point', 'MAE'],
-        ['ae_point_relative_skill', 'Rel. MAE'],
         ['ae_point_scaled_relative_skill', 'Rel. MAE'],
         ['se_point', 'MSE'],
-        ['se_point_relative_skill', 'Rel. MSE'],
         ['se_point_scaled_relative_skill', 'Rel. MSE']
     ]
 )
@@ -119,6 +116,7 @@ const score_col_name_to_text_map = new Map(
  * @param {String} score_col_name - the name of a column in a scores data object
  */
 function score_col_name_to_text(score_name) {
+    // console.log(score_name);
     const interval_coverage_regex = new RegExp('^interval_coverage_');
     if (interval_coverage_regex.test(score_name)) {
         return `${score_name.slice(18)}\% Cov.`;
@@ -158,6 +156,8 @@ const App = {
         selected_target: '',
         selected_disaggregate_by: '',
         selected_eval_window: '',
+        sort_models_by: 'model_id',
+        sort_models_direction: 1,
         // selected_display_type: '',
 
         // 2/2 Data used to create tables or plots:
@@ -215,8 +215,8 @@ const App = {
         this.state.task_id_text = options['task_id_text'];
 
         // save initial selected state
-        this.state.selected_target = options['initial_target'];
-        this.state.selected_eval_window = options['initial_eval_window'];
+        this.state.selected_target = options['targets'][0].target_id;
+        this.state.selected_eval_window = options['eval_windows'][0].window_name;
         this.state.selected_disaggregate_by = '(None)';
         // this.state.selected_display_type = 'Table';
         this.state.selected_metric = this.getSelectedTargetObj().metrics[0];
@@ -305,10 +305,10 @@ const App = {
         $metricSelect.empty();
         selected_target_obj.metrics.forEach(function (metric) {
             const selected = metric === thisState.selected_metric ? 'selected' : '';
-            const optionNode = `<option value="${metric}" ${selected} >${metric}</option>`;
+            const optionNode = `<option value="${metric}" ${selected} >${score_col_name_to_text(metric)}</option>`;
             $metricSelect.append(optionNode);
         });
-        if (thisState.selected_display_type === 'Table') {
+        if (thisState.selected_disaggregate_by === '(None)') {
             $metricSelect.prop("disabled", true);
         } else {
             $metricSelect.prop("disabled", false);  
@@ -323,11 +323,16 @@ const App = {
         });
         $('#predeval_disaggregate_by').on('change', function () {
             App.state.selected_disaggregate_by = this.value;
+            App.initializeMetricUI();
             App.fetchDataUpdateDisplay(true);
         });
         $('#predeval_eval_window').on('change', function () {
             App.state.selected_eval_window = this.value;
             App.fetchDataUpdateDisplay(true);
+        });
+        $('#predeval_metric').on('change', function () {
+            App.state.selected_metric = this.value;
+            App.fetchDataUpdateDisplay(false);
         });
         // $('#predeval_display_type').on('change', function () {
         //     App.state.selected_display_type = this.value;
@@ -420,11 +425,41 @@ const App = {
         const $th = $('<th></th>');
         const $td = $('<td></td>');
         const interval_coverage_regex = new RegExp('^interval_coverage_');
+        const relative_skill_regex = new RegExp('_scaled_relative_skill$');
+
+        // sort scores
+        // use of d3.ascending() and d3.descending() is verbose,
+        // but it works reliably for all data types
+        // (have not thoroughly explored alternatives)
+        const sort_models_by = this.state.sort_models_by;
+        if (this.state.sort_models_direction > 0) {
+            this.state.scores.sort((a, b) => d3.ascending(a[sort_models_by], b[sort_models_by]));
+        } else {
+            this.state.scores.sort((a, b) => d3.descending(a[sort_models_by], b[sort_models_by]));
+        }
 
         // add header row
         const cols = thisState.scores.columns;
         cols.forEach(function (c) {
-            $tr.append($th.clone().text(score_col_name_to_text(c)));
+            $tr.append(
+                $th.clone()
+                    .hover(
+                        function () {
+                            // on hover, change background color and cursor
+                            $(this).css('background-color', 'rgba(0,0,0,.075)')
+                                .css('cursor', 'pointer');
+                        },
+                        function () {
+                            // on exit hover, reset background color and cursor
+                            $(this).css('background-color', '')
+                                .css('cursor', 'default');
+                        }
+                    )
+                    .on('click', function() {
+                        App.updateTableSorting(c);
+                    })
+                    .text(score_col_name_to_text(c))
+            );
         });
         $thead.append($tr);
         $table.append($thead);
@@ -435,7 +470,7 @@ const App = {
             for (let j = 0; j < cols.length; j++) { // table columns
                 const col_name = cols[j];
                 let text_value = thisState.scores[i][col_name];
-                if (col_name !== 'model_id') {
+                if (col_name !== 'model_id' && col_name !== 'n') {
                     // This is a score column, so convert to float
                     text_value = parseFloat(text_value);
 
@@ -446,8 +481,12 @@ const App = {
                         text_value *= 100;
                     }
 
-                    // For all score columns, round to 1 decimal place
-                    text_value = text_value.toFixed(1);
+                    // Round to 2 decimal places for relative_skill columns and 1 or all other score columns
+                    if (relative_skill_regex.test(col_name)) {
+                        text_value = text_value.toFixed(2);
+                    } else {
+                        text_value = text_value.toFixed(1);
+                    }
                 }
                 $tr.append($td.clone().text(text_value));
             }
@@ -457,6 +496,15 @@ const App = {
 
         // replace existing table
         $evalDiv.append($table);
+    },
+    updateTableSorting(col_name) {
+        if (this.state.sort_models_by === col_name) {
+            this.state.sort_models_direction *= -1;
+        } else {
+            this.state.sort_models_by = col_name;
+            this.state.sort_models_direction = 1;
+        }
+        this.updateTable();
     },
 
     //
@@ -489,7 +537,7 @@ const App = {
             autosize: true,
             showlegend: true,
             title: {
-                text: `${this.state.selected_metric} by ${this.state.selected_disaggregate_by}`,
+                text: `${score_col_name_to_text(this.state.selected_metric)} by ${this.state.selected_disaggregate_by}`,
                 x: 0.5,
                 y: 0.90,
                 xanchor: 'center',
@@ -500,7 +548,7 @@ const App = {
                 fixedrange: false
             },
             yaxis: {
-                title: {text: this.state.selected_metric, hoverformat: '.2f'},
+                title: {text: score_col_name_to_text(this.state.selected_metric), hoverformat: '.2f'},
                 fixedrange: false
             }
         }
