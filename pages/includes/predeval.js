@@ -166,7 +166,6 @@ const App = {
         //     return error;  // leave display default/blank
         // }
 
-        console.log(options);
         // save static vars
         this.state.targets = options['targets'];
         this.state.eval_windows = options['eval_windows'];
@@ -189,7 +188,7 @@ const App = {
 
         // pull initial data (scores) and update the plot
         console.debug('initialize(): fetching data and updating display');
-        // this.fetchDataUpdateDisplay(true, true);
+        this.fetchDataUpdateDisplay(true);
 
         console.debug('initialize(): done');
         return null;  // no error
@@ -213,7 +212,9 @@ const App = {
         // populate the target <SELECT>
         const $targetSelect = $("#predeval_target");
         const thisState = this.state;
+        console.log(thisState.targets);
         thisState.targets.forEach(function (target) {
+            console.log(target);
             const target_id = target.target_id;
             const selected = target_id === thisState.selected_target ? 'selected' : '';
             const optionNode = `<option value="${target_id}" ${selected} >${target_id}</option>`;
@@ -225,7 +226,7 @@ const App = {
         const $disaggregateSelect = $("#predeval_disaggregate_by");
         const thisState = this.state;
         const selected_target_obj = thisState.targets.filter((obj) => obj.target_id === thisState.selected_target)[0];
-        const disaggregate_bys = selected_target_obj.disaggregate_by;
+        const disaggregate_bys = ['(None)'].concat(selected_target_obj.disaggregate_by);
         $disaggregateSelect.empty();
         disaggregate_bys.forEach(function (by) {
             const selected = by === thisState.selected_disaggregate_by ? 'selected' : '';
@@ -317,32 +318,76 @@ const App = {
     fetchDataUpdateDisplay(isFetchFirst) {
         if (isFetchFirst) {
             const promises = [this.fetchScores()];
-            console.debug(`fetchDataUpdateDisplay(${isFetchFirst}, ${isFetchCurrentTruth}): waiting on promises`);
+            console.debug(`fetchDataUpdateDisplay(${isFetchFirst}): waiting on promises`);
             // const $plotyDiv = $('#ploty_div');
             // if (this.isIndicateRedraw) {
             //     $plotyDiv.fadeTo(0, 0.25);
             // }
             Promise.all(promises).then((values) => {
-                console.debug(`fetchDataUpdateDisplay(${isFetchFirst}, ${isFetchCurrentTruth}): Promise.all() done. updating plot`, values);
+                console.debug(`fetchDataUpdateDisplay(${isFetchFirst}): Promise.all() done. updating plot`, values);
+                this.updateDisplay();
                 // this.updateDisplay(isResetYLimit);
                 // if (this.isIndicateRedraw) {
                 //     $plotyDiv.fadeTo(0, 1.0);
                 // }
             });
         } else {
-            console.debug(`fetchDataUpdateDisplay(${isFetchFirst}, ${isFetchCurrentTruth}): updating plot`);
-            // this.updateDisplay(isResetYLimit);
+            console.debug(`fetchDataUpdateDisplay(${isFetchFirst}): updating plot`);
+            this.updateDisplay();
         }
     },
     fetchScores() {
-        this.state.scores = {};  // clear in case of error
-        return this._fetchData(true,  // Promise
+        this.state.scores = [];  // clear in case of error
+        return this._fetchData(  // Promise
             this.state.selected_target, this.state.selected_eval_window, this.state.selected_disaggregate_by)
-            .then(response => response.json())  // Promise
+            // .then(response => response.json())  // Promise
             .then((data) => {
                 this.state.scores = data;
             })
             .catch(error => console.error(`fetchScores(): error: ${error.message}`));
+    },
+
+    // update display
+    updateDisplay() {
+        console.log('updateDisplay(): entered');
+        if (this.state.selected_display_type === 'table') {
+            this.updateTable();
+        } else {
+            this.updatePlot();
+        }
+    },
+
+    // update display with table
+    updateTable() {
+        const thisState = this.state;
+        const $evalDiv = $('#predeval_main');
+        const $table = $('<table id="predeval_table class="table table-sm table-striped table-bordered"></table>');
+        const $thead = $('<thead></thead>');
+        const $tbody = $('<tbody></tbody>');
+        const $tr = $('<tr></tr>');
+        const $th = $('<th></th>');
+        const $td = $('<td></td>');
+
+        // add header row
+        const header = thisState.scores[0];
+        header.forEach(function (h) {
+            $tr.append($th.clone().text(h));
+        });
+        $thead.append($tr);
+        $table.append($thead);
+
+        // add data rows
+        thisState.scores.slice(1).forEach(function (scores_row) {
+            const $tr = $('<tr></tr>');
+            scores_row.forEach(function (score) {
+                $tr.append($td.clone().text(score));
+            });
+            $tbody.append($tr);
+        });
+        $table.append($tbody);
+
+        // replace existing table
+        $evalDiv.empty().append($table);
     },
 
     //
