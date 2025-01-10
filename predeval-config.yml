@@ -8,7 +8,7 @@ targets:
   relative_metrics:
   - wis
   - ae_median
-  baseline: FS-base
+  baseline: FluSight-baseline
   disaggregate_by:
   - location
   - reference_date
