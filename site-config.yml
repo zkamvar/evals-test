@@ -2,4 +2,6 @@
 hub: "cdcepi/FluSight-forecast-hub/"
 title: "FluSight Forecast Hub Dashboard"
 pages:
- - "eval.qmd"
+ - text: "Evaluation"
+   icon: table
+   href: eval.qmd
