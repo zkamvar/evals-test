@@ -1,5 +1,4 @@
-// import App from 'https://cdn.jsdelivr.net/gh/reichlab/predtimechart@2.0.11/dist/predtimechart.bundle.js';
-import App from './predeval.js'
+import App from "https://cdn.jsdelivr.net/gh/hubverse-org/predeval@0.0.1/dist/predeval.bundle.js";
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 
 document.predeval = App;  // for debugging
