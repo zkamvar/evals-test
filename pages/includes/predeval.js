@@ -126,8 +126,8 @@ const App = {
 
     state: {
         // Static data, fixed at time of creation:
-        targets: {},
-        eval_windows: [], // TODO: standardize eval_windows as object rather than array
+        targets: [],
+        eval_windows: [],
         task_id_text: {},
 
         // Dynamic/updated data, used to track 2 categories:
