@@ -7,27 +7,6 @@ permissions:
   contents: write
 
 jobs:
-  setup:
-    name: "Setup"
-    runs-on: "ubuntu-latest"
-    outputs:
-      repo: ${{ steps.echo.outputs.repo }}
-      email: ${{ steps.echo.outputs.email }}
-      slug: ${{ steps.echo.outputs.slug }}
-    steps:
-      - id: echo
-        run: |
-          name="${{ github.event.repository.name }}"
-          owner="${{ github.event.repository.owner.login }}"
-          id="${{ github.event.repository.owner.id }}"
-          email="$id+$owner@users.noreply.github.com"
-          {
-            echo 'repo<<EOF'
-            echo [{'"'name'"': '"'$name'"', '"'owner'"': '"'$owner'"'}]
-            echo EOF
-          } >> "$GITHUB_OUTPUT"
-          echo slug=$owner >> "$GITHUB_OUTPUT"
-          echo email=$email >> "$GITHUB_OUTPUT"
   site:
     uses: hubverse-org/hub-dashboard-control-room/.github/workflows/generate-site.yaml@znk/move-matrix/14
     with:
