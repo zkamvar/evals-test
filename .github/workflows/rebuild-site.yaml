@@ -29,12 +29,12 @@ jobs:
           echo slug=$owner >> "$GITHUB_OUTPUT"
           echo email=$email >> "$GITHUB_OUTPUT"
   site:
-    needs: [setup]
     uses: hubverse-org/hub-dashboard-control-room/.github/workflows/generate-site.yaml@znk/move-matrix/14
     with:
-      repos: '${{ needs.setup.outputs.repo }}'
-      slug: '${{ needs.setup.outputs.slug }}'
-      email: '${{ needs.setup.outputs.email }}'
+      owner: '${{ github.event.repository.owner.login }}'
+      name: '${{ github.event.repository.name }}'
+      slug: '${{ github.event.repository.owner.login }}'
+      email: '${{ github.event.repository.owner.id }}+${{ github.event.repository.owner.login }}@users.noreply.github.com'
     secrets:
       id: 'none'
       key: ${{ secrets.GITHUB_TOKEN }}
