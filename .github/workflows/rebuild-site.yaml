@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   site:
-    uses: hubverse-org/hub-dashboard-control-room/.github/workflows/generate-site.yaml@znk/move-matrix/14
+    uses: hubverse-org/hub-dashboard-control-room/.github/workflows/generate-site.yaml@main
     with:
       owner: '${{ github.event.repository.owner.login }}'
       name: '${{ github.event.repository.name }}'
